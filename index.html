@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>探金小秘書 v8.1</title>
+    <title>探金小秘書 v8.3</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- React & ReactDOM -->
@@ -83,6 +83,7 @@
           const [toast, setToast] = useState('');
           const [modal, setModal] = useState(null); 
           const [editingDailyRecord, setEditingDailyRecord] = useState(null);
+          const [reportMonthFilter, setReportMonthFilter] = useState(() => new Date().toISOString().slice(0,7));
           
           const [projects, setProjects] = useState(() => JSON.parse(localStorage.getItem('v8_projects') || '[]'));
           const [records, setRecords] = useState(() => JSON.parse(localStorage.getItem('v8_records') || '[]'));
@@ -111,10 +112,16 @@
             window.scrollTo(0,0);
           };
 
+          const handleJumpToReport = (month) => {
+            setReportMonthFilter(month);
+            setActiveTab('report');
+            window.scrollTo(0,0);
+          };
+
           const navItems = [
             { id: 'add_proj', icon: 'add_proj', label: '新增工程' },
             { id: 'daily', icon: 'daily', label: '每日紀錄' },
-            { id: 'salary', icon: 'salary', label: '出勤&薪資' },
+            { id: 'salary', icon: 'salary', label: '薪資＆出勤' },
             { id: 'billing', icon: 'billing', label: '請款' },
             { id: 'matrix', icon: 'matrix', label: '月報' },
             { id: 'report', icon: 'report', label: '日報' },
@@ -166,8 +173,8 @@
                 {activeTab === 'daily' && <TabDailyRecord projects={projects} records={records} setRecords={setRecords} settings={settings} showToast={showToast} setActiveTab={setActiveTab} editingDailyRecord={editingDailyRecord} setEditingDailyRecord={setEditingDailyRecord} />}
                 {activeTab === 'salary' && <TabSalary records={records} settings={settings} projects={projects} manualSalaries={manualSalaries} setManualSalaries={setManualSalaries} />}
                 {activeTab === 'billing' && <TabBilling projects={projects} records={records} billings={billings} setBillings={setBillings} showToast={showToast} />}
-                {activeTab === 'matrix' && <TabMatrix projects={projects} records={records} onEdit={handleEditDaily} />}
-                {activeTab === 'report' && <TabReport records={records} projects={projects} onEdit={handleEditDaily} onDelete={(id) => confirmDelete('刪除紀錄', '確定要刪除這筆日報嗎？', () => setRecords(prev => prev.filter(r => r.id !== id)))} />}
+                {activeTab === 'matrix' && <TabMatrix projects={projects} records={records} onJumpToReport={handleJumpToReport} />}
+                {activeTab === 'report' && <TabReport records={records} projects={projects} onEdit={handleEditDaily} onDelete={(id) => confirmDelete('刪除紀錄', '確定要刪除這筆日報嗎？', () => setRecords(prev => prev.filter(r => r.id !== id)))} initialMonth={reportMonthFilter} />}
                 {activeTab === 'proj_rec' && <TabProjectRecord projects={projects} records={records} onEdit={handleEditDaily} />}
                 {activeTab === 'stats' && <TabStats records={records} />}
                 {activeTab === 'settings' && <TabSettings settings={settings} setSettings={setSettings} projects={projects} setProjects={setProjects} records={records} setRecords={setRecords} billings={billings} setBillings={setBillings} manualSalaries={manualSalaries} setManualSalaries={setManualSalaries} showToast={showToast} />}
@@ -226,6 +233,16 @@
             window.scrollTo(0,0);
           };
 
+          const moveProject = (index, direction) => {
+            const newIndex = index + direction;
+            if (newIndex < 0 || newIndex >= projects.length) return;
+            const updated = [...projects];
+            const temp = updated[index];
+            updated[index] = updated[newIndex];
+            updated[newIndex] = temp;
+            setProjects(updated);
+          };
+
           return (
             <div className="space-y-2">
               <Card>
@@ -281,11 +298,17 @@
               </Card>
 
               <Card>
-                <div className="font-bold text-slate-500 mb-2 border-b pb-1">已建立工程專案</div>
+                <div className="font-bold text-slate-500 mb-2 border-b pb-1 flex justify-between items-center">
+                  <span>已建立工程專案 (可上下排序，月報將依此排序呈現)</span>
+                </div>
                 <div className="space-y-1.5">
-                  {projects.map(p => (
+                  {projects.map((p, index) => (
                     <div key={p.id} className="bg-slate-50 border border-slate-200 rounded-lg p-2 flex justify-between items-center">
-                      <div className="flex-1 min-w-0 pr-2">
+                      <div className="flex items-center gap-1.5 shrink-0 pr-1">
+                        <button onClick={()=>moveProject(index, -1)} disabled={index === 0} className="w-6 h-6 bg-white border border-slate-200 rounded flex items-center justify-center text-slate-600 font-bold disabled:opacity-30">▲</button>
+                        <button onClick={()=>moveProject(index, 1)} disabled={index === projects.length - 1} className="w-6 h-6 bg-white border border-slate-200 rounded flex items-center justify-center text-slate-600 font-bold disabled:opacity-30">▼</button>
+                      </div>
+                      <div className="flex-1 min-w-0 px-1">
                         <div className="text-sm font-bold text-slate-800 truncate mb-0.5">
                           <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-bold mr-1.5 align-middle">{p.type}</span>
                           {p.name} <span className="text-[11px] font-medium text-slate-500 ml-1">- 客戶：{p.client} - 地點：{p.location}</span>
@@ -354,7 +377,7 @@
             } : e)
           }));
           const removeEmpProj = (empId, pId) => setForm(p => ({
-            ...p, employees: p.employees.map(e => e.id === empId ? { ...e, projects: e.projects.filter(pr => pr.id !== pId) } : e)
+            ...p, employees: p.employees.map(e => e.id === empId ? { ...e, projects: e.projects.filter(pr => pr.projId !== pId) } : e)
           }));
 
           const addAllowance = (empId) => setForm(p => ({
@@ -800,19 +823,9 @@
           );
         }
 
-        function TabMatrix({ projects, records, onEdit }) {
-          const [month, setMonth] = useState(new Date().toISOString().slice(0,7));
+        function TabMatrix({ projects, records, onJumpToReport }) {
+          const [month, setMonth] = useState(() => new Date().toISOString().slice(0,7));
 
-          // 固定呈現5個工程，如果專案不足5個自動補空位以維持版面整齊
-          const targetProjects = useMemo(() => {
-            const list = [...projects];
-            while(list.length < 5) {
-              list.push({ id: `dummy_${list.length}`, name: '-', client: '', isDummy: true });
-            }
-            return list.slice(0, 5); // 強制固定 5 個工程欄位
-          }, [projects]);
-
-          // 日期由上往下 1, 2, 3... 依序排列
           const daysInMonth = useMemo(() => {
             const [y, m] = month.split('-');
             const count = new Date(y, m, 0).getDate();
@@ -828,8 +841,7 @@
             records.filter(r => r.date.startsWith(month)).forEach(r => {
               map[r.date] = map[r.date] || {};
               
-              targetProjects.forEach(p => {
-                if(p.isDummy) return;
+              projects.forEach(p => {
                 let workersCount = 0;
                 let hasFull = false;
                 let hasHalf = false;
@@ -865,14 +877,13 @@
                     shiftText,
                     totalCost: Math.round(totalCost),
                     matTotal,
-                    expTotal,
-                    originalRecord: r
+                    expTotal
                   };
                 }
               });
             });
             return map;
-          }, [records, targetProjects, month]);
+          }, [records, projects, month]);
 
           return (
             <div className="space-y-3">
@@ -880,70 +891,186 @@
                 <input type="month" value={month} onChange={e=>setMonth(e.target.value)} className="w-full p-2 border border-slate-200 rounded-lg bg-slate-50 font-bold outline-none text-sm text-center" />
               </Card>
 
-              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto hide-scrollbar">
-                  <table className="w-full border-collapse text-left text-xs table-fixed">
-                    <thead>
-                      <tr className="bg-slate-900 text-white border-b border-slate-800">
-                        <th className="p-2 font-extrabold sticky left-0 bg-slate-900 z-10 text-center shadow-[2px_0_5px_rgba(0,0,0,0.1)] w-[45px]">日期</th>
-                        {targetProjects.map(p => (
-                          <th key={p.id} className="p-1.5 font-bold text-center border-l border-slate-800 w-[78px] truncate" title={p.name}>
-                            <div className="truncate text-[11px]">{p.name}</div>
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {daysInMonth.map(date => {
-                        const row = matrixData[date] || {};
-                        const hasAnyData = targetProjects.some(p => !p.isDummy && row[p.id]);
+              {projects.length === 0 ? (
+                <div className="text-center text-slate-400 py-10 bg-white rounded-xl border border-slate-200 font-bold">請先至「新增工程」建立工程專案</div>
+              ) : (
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                  <div className="overflow-x-auto hide-scrollbar">
+                    <table className="w-full border-collapse text-left text-[11px] table-fixed">
+                      <thead>
+                        <tr className="bg-slate-900 text-white border-b border-slate-800">
+                          <th className="p-2 font-extrabold sticky left-0 bg-slate-900 z-10 text-center shadow-[2px_0_5px_rgba(0,0,0,0.1)] w-[45px]">日期</th>
+                          {projects.map(p => (
+                            <th key={p.id} className="p-1.5 font-bold text-center border-l border-slate-800 w-[70px] truncate" title={p.name}>
+                              <div className="truncate text-[10px]">{p.name}</div>
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {daysInMonth.map(date => {
+                          const row = matrixData[date] || {};
+                          const hasAnyData = projects.some(p => row[p.id]);
+                          if(!hasAnyData) return null; // 自動隱藏無紀錄的日期
 
-                        return (
-                          <tr key={date} className={`border-b border-slate-100 transition-colors ${hasAnyData ? 'bg-white hover:bg-slate-50' : 'bg-slate-50/40 text-slate-300'}`}>
-                            <td className="p-1.5 font-mono font-bold text-slate-600 sticky left-0 bg-slate-50 z-10 text-center border-r border-slate-100 shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
-                              {date.slice(8)}
-                            </td>
-                            {targetProjects.map(p => {
-                              if(p.isDummy) {
-                                return <td key={p.id} className="p-1 text-center text-slate-200 border-l border-slate-100">-</td>;
-                              }
-                              const cell = row[p.id];
-                              if(!cell) {
-                                return <td key={p.id} className="p-1 text-center text-slate-200 border-l border-slate-100">-</td>;
-                              }
+                          return (
+                            <tr key={date} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                              <td className="p-1.5 font-mono font-bold text-slate-600 sticky left-0 bg-slate-50 z-10 text-center border-r border-slate-100 shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
+                                {date.slice(8)}
+                              </td>
+                              {projects.map(p => {
+                                const cell = row[p.id];
+                                if(!cell) {
+                                  return <td key={p.id} className="p-1 text-center text-slate-200 border-l border-slate-100">-</td>;
+                                }
 
-                              return (
-                                <td key={p.id} className="p-1 border-l border-slate-100">
-                                  <div 
-                                    onClick={() => onEdit(cell.originalRecord)} 
-                                    className="bg-blue-50/80 hover:bg-blue-100 border border-blue-200/60 rounded p-1 cursor-pointer transition-all shadow-2xs text-center"
-                                    title="點擊編輯日報"
-                                  >
-                                    <div className="text-[10px] font-extrabold text-blue-900 truncate">
-                                      {cell.workersCount}人({cell.shiftText})
+                                return (
+                                  <td key={p.id} className="p-1 border-l border-slate-100">
+                                    <div 
+                                      onClick={() => onJumpToReport(month)} 
+                                      className="bg-blue-50/70 hover:bg-blue-100 border border-blue-200/50 rounded p-1 cursor-pointer transition-all text-center"
+                                      title="點擊前往日報"
+                                    >
+                                      <div className="font-black text-blue-900 text-[10px] truncate">
+                                        {cell.workersCount}({cell.shiftText})
+                                      </div>
+                                      <div className="text-[9px] text-emerald-700 font-extrabold">
+                                        ${cell.totalCost}
+                                      </div>
                                     </div>
-                                    <div className="text-[9px] text-emerald-700 font-black">
-                                      ${cell.totalCost}
-                                    </div>
-                                  </div>
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  {Object.keys(matrixData).length === 0 && (
+                    <div className="text-center text-slate-400 py-10 font-medium">本月尚無任何工程日報對照紀錄</div>
+                  )}
                 </div>
-              </div>
+              )}
             </div>
           );
         }
 
-        function TabReport({ records, projects, onEdit, onDelete }) {
-          const [month, setMonth] = useState(new Date().toISOString().slice(0,7));
+        function TabProjectRecord({ projects, records, onEdit }) {
+          const [projFilter, setProjFilter] = useState('全部');
+          const [expandedObj, setExpandedObj] = useState({});
+
+          const toggle = (key, e) => {
+             if(e) e.stopPropagation();
+             setExpandedObj(p => ({ ...p, [key]: !p[key] }));
+          };
+
+          const pStats = useMemo(() => {
+            return projects.filter(p => projFilter === '全部' || p.id === projFilter).map(p => {
+              const recs = [];
+              let salCost=0, matCost=0, othCost=0;
+
+              records.forEach(r => {
+                let dayWorkers = [];
+                let dayTasks = new Set();
+                let dayAdded = false;
+
+                r.employees.forEach(e => {
+                  const pr = e.projects.find(x => x.projId === p.id);
+                  if(pr) {
+                    dayWorkers.push(e.name);
+                    if(pr.taskName) dayTasks.add(pr.taskName);
+                    salCost += (Number(e.salary)||0) / e.projects.length;
+                    dayAdded = true;
+                  }
+                });
+                
+                const mats = r.materials.filter(m => m.projId === p.id);
+                mats.forEach(m => matCost += Number(m.total)||0);
+                
+                const exps = r.expenses.filter(ex => ex.projId === p.id);
+                exps.forEach(ex => othCost += Number(ex.total)||0);
+
+                if(dayAdded || mats.length>0 || exps.length>0) {
+                  recs.push({ date: r.date, workers: dayWorkers, tasks: Array.from(dayTasks).join('、'), mats, exps, originalRecord: r });
+                }
+              });
+
+              recs.sort((a,b)=>a.date.localeCompare(b.date));
+              
+              const billings = JSON.parse(localStorage.getItem('v8_billings') || '{}');
+              let totalBill = 0;
+              Object.keys(billings).forEach(k => { if(k.startsWith(p.id)) totalBill += billings[k]; });
+
+              return { ...p, recs, salCost, matCost, othCost, totalCost: salCost+matCost+othCost, totalBill };
+            }).filter(p => p.recs.length > 0);
+          }, [projects, records, projFilter]);
+
+          return (
+            <div className="space-y-2">
+              <Card>
+                <select value={projFilter} onChange={e=>setProjFilter(e.target.value)} className="w-full p-2 border border-slate-200 rounded-lg bg-slate-50 font-bold outline-none text-xs">
+                  <option value="全部">全部工程紀錄</option>
+                  {projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </Card>
+
+              {pStats.map(p => (
+                <Card key={p.id} className="p-0 overflow-hidden border-slate-200">
+                  <div onClick={()=>toggle(p.id)} className="p-3 bg-white cursor-pointer active:bg-slate-50 transition-colors select-none">
+                    <div className="flex justify-between items-start mb-2.5">
+                      <div>
+                        <div className="font-extrabold text-sm mb-0.5 text-slate-800">{p.name} <span className="text-[11px] text-slate-500 font-medium ml-1">| 客戶：{p.client}</span></div>
+                      </div>
+                      <span className={`w-5 h-5 bg-slate-100 flex items-center justify-center rounded text-[10px] font-bold ${expandedObj[p.id]?'text-blue-600 bg-blue-50':'text-slate-500'}`}>{expandedObj[p.id]?'▲':'▼'}</span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-1.5 text-center text-[10px] font-bold">
+                      <div className="bg-slate-50 rounded-lg p-1.5 border border-slate-100"><span className="text-slate-400 block mb-0.5 text-[9px]">人工費</span>${Math.round(p.salCost).toLocaleString()}</div>
+                      <div className="bg-slate-50 rounded-lg p-1.5 border border-slate-100"><span className="text-slate-400 block mb-0.5 text-[9px]">材料費</span>${p.matCost.toLocaleString()}</div>
+                      <div className="bg-slate-50 rounded-lg p-1.5 border border-slate-100"><span className="text-slate-400 block mb-0.5 text-[9px]">其他費用</span>${p.othCost.toLocaleString()}</div>
+                      <div className="bg-blue-50 text-blue-700 rounded-lg p-1.5 border border-blue-100"><span className="text-blue-400 block mb-0.5 text-[9px]">總請款金額</span><span className="text-xs font-black">${p.totalBill.toLocaleString()}</span></div>
+                    </div>
+                  </div>
+
+                  {expandedObj[p.id] && (
+                    <div className="p-2 bg-slate-50 border-t border-slate-100 space-y-1.5 text-[10px]">
+                      {p.recs.map((r, i) => (
+                        <div key={i} className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-2xs">
+                          <div onClick={(e)=>toggle(`${p.id}_${r.date}`, e)} className="flex items-center gap-2 p-2 cursor-pointer hover:bg-slate-50">
+                            <div className="font-mono text-slate-500 w-12 shrink-0 bg-slate-100 px-1 py-0.5 rounded text-center font-bold">{r.date.slice(5)}</div>
+                            <div className="w-8 text-center font-bold text-slate-600 shrink-0 bg-slate-50 rounded py-0.5">{r.workers.length}人</div>
+                            <div className="flex-1 font-bold text-slate-700 truncate">{r.tasks || '無摘要'}</div>
+                            <button onClick={(e)=>{e.stopPropagation(); onEdit(r.originalRecord);}} className="text-[10px] bg-blue-100 hover:bg-blue-200 text-blue-700 px-2.5 py-1 rounded font-bold shrink-0 transition-colors">編輯</button>
+                            <div className="text-[8px] text-slate-400 font-bold ml-1">{expandedObj[`${p.id}_${r.date}`]?'▲':'▼'}</div>
+                          </div>
+                          
+                          {expandedObj[`${p.id}_${r.date}`] && (
+                            <div className="p-2 bg-slate-50/80 border-t border-slate-100 space-y-1">
+                              {r.workers.length>0 && <div className="text-slate-700 font-bold mb-1">出席人員: <span className="text-blue-600">{r.workers.join('、')}</span></div>}
+                              {r.mats.map((m,j) => <div key={'m'+j} className="flex justify-between items-center text-slate-600 bg-white px-1.5 py-1 rounded border border-slate-100"><span className="truncate flex-1">📦 {m.name} <span className="text-[9px] text-slate-400">(x{m.qty})</span></span><span className="shrink-0 ml-2 font-bold">${m.total}</span></div>)}
+                              {r.exps.map((ex,j) => <div key={'e'+j} className="flex justify-between items-center text-slate-600 bg-white px-1.5 py-1 rounded border border-slate-100"><span className="truncate flex-1">⛽ {ex.name}</span><span className="shrink-0 ml-2 font-bold">${ex.total}</span></div>)}
+                              {r.mats.length === 0 && r.exps.length === 0 && <div className="text-slate-400 text-[9px] italic">無物料與其他費用紀錄</div>}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </Card>
+              ))}
+              {pStats.length===0 && <div className="text-center text-slate-400 py-6 font-bold bg-white rounded-lg border border-slate-200">尚無工程紀錄</div>}
+            </div>
+          );
+        }
+
+        function TabReport({ records, projects, onEdit, onDelete, initialMonth }) {
+          const [month, setMonth] = useState(initialMonth || new Date().toISOString().slice(0,7));
           const [expandedRecs, setExpandedRecs] = useState({});
           
+          useEffect(() => {
+            if (initialMonth) setMonth(initialMonth);
+          }, [initialMonth]);
+
           const filtered = records.filter(r => r.date.startsWith(month)).sort((a,b)=>b.date.localeCompare(a.date));
           
           const toggleRec = (id) => setExpandedRecs(p => ({...p, [id]: !p[id]}));
@@ -990,7 +1117,7 @@
           return (
             <div className="space-y-3">
               <div className="bg-slate-900 text-white p-3 rounded-xl flex justify-between items-center shadow-lg">
-                <input type="month" value={month} onChange={e=>setMonth(e.target.value)} className="bg-transparent font-bold text-sm outline-none cursor-pointer" />
+                <input type="month" value={month} onChange={e=>setMonth(e.target.value)} className="bg-slate-800 text-white font-bold text-xs p-1 rounded outline-none border border-slate-700 cursor-pointer" />
                 <span className="font-extrabold text-xs">探金小秘書</span>
               </div>
 
@@ -1109,113 +1236,6 @@
                 })}
                 {filtered.length===0 && <div className="text-center text-slate-400 py-8 font-bold bg-white rounded-xl border border-slate-200">無紀錄</div>}
               </div>
-            </div>
-          );
-        }
-
-        function TabProjectRecord({ projects, records, onEdit }) {
-          const [projFilter, setProjFilter] = useState('全部');
-          const [expandedObj, setExpandedObj] = useState({});
-
-          const toggle = (key, e) => {
-             if(e) e.stopPropagation();
-             setExpandedObj(p => ({ ...p, [key]: !p[key] }));
-          };
-
-          const pStats = useMemo(() => {
-            return projects.filter(p => projFilter === '全部' || p.id === projFilter).map(p => {
-              const recs = [];
-              let salCost=0, matCost=0, othCost=0;
-
-              records.forEach(r => {
-                let dayWorkers = [];
-                let dayTasks = new Set();
-                let dayAdded = false;
-
-                r.employees.forEach(e => {
-                  const pr = e.projects.find(x => x.projId === p.id);
-                  if(pr) {
-                    dayWorkers.push(e.name);
-                    if(pr.taskName) dayTasks.add(pr.taskName);
-                    salCost += (Number(e.salary)||0) / e.projects.length;
-                    dayAdded = true;
-                  }
-                });
-                
-                const mats = r.materials.filter(m => m.projId === p.id);
-                mats.forEach(m => matCost += Number(m.total)||0);
-                
-                const exps = r.expenses.filter(ex => ex.projId === p.id);
-                exps.forEach(ex => othCost += Number(ex.total)||0);
-
-                if(dayAdded || mats.length>0 || exps.length>0) {
-                  recs.push({ date: r.date, workers: dayWorkers, tasks: Array.from(dayTasks).join('、'), mats, exps, originalRecord: r });
-                }
-              });
-
-              recs.sort((a,b)=>a.date.localeCompare(b.date));
-              
-              const billings = JSON.parse(localStorage.getItem('v8_billings') || '{}');
-              let totalBill = 0;
-              Object.keys(billings).forEach(k => { if(k.startsWith(p.id)) totalBill += billings[k]; });
-
-              return { ...p, recs, salCost, matCost, othCost, totalCost: salCost+matCost+othCost, totalBill };
-            }).filter(p => p.recs.length > 0);
-          }, [projects, records, projFilter]);
-
-          return (
-            <div className="space-y-2">
-              <Card>
-                <select value={projFilter} onChange={e=>setProjFilter(e.target.value)} className="w-full p-2 border border-slate-200 rounded-lg bg-slate-50 font-bold outline-none text-xs">
-                  <option value="全部">全部工程紀錄</option>
-                  {projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              </Card>
-
-              {pStats.map(p => (
-                <Card key={p.id} className="p-0 overflow-hidden border-slate-200">
-                  <div onClick={()=>toggle(p.id)} className="p-3 bg-white cursor-pointer active:bg-slate-50 transition-colors select-none">
-                    <div className="flex justify-between items-start mb-2.5">
-                      <div>
-                        <div className="font-extrabold text-sm mb-0.5 text-slate-800">{p.name} <span className="text-[11px] text-slate-500 font-medium ml-1">| 客戶：{p.client}</span></div>
-                      </div>
-                      <span className={`w-5 h-5 bg-slate-100 flex items-center justify-center rounded text-[10px] font-bold ${expandedObj[p.id]?'text-blue-600 bg-blue-50':'text-slate-500'}`}>{expandedObj[p.id]?'▲':'▼'}</span>
-                    </div>
-                    <div className="grid grid-cols-4 gap-1.5 text-center text-[10px] font-bold">
-                      <div className="bg-slate-50 rounded-lg p-1.5 border border-slate-100"><span className="text-slate-400 block mb-0.5 text-[9px]">人工費</span>${Math.round(p.salCost).toLocaleString()}</div>
-                      <div className="bg-slate-50 rounded-lg p-1.5 border border-slate-100"><span className="text-slate-400 block mb-0.5 text-[9px]">材料費</span>${p.matCost.toLocaleString()}</div>
-                      <div className="bg-slate-50 rounded-lg p-1.5 border border-slate-100"><span className="text-slate-400 block mb-0.5 text-[9px]">其他費用</span>${p.othCost.toLocaleString()}</div>
-                      <div className="bg-blue-50 text-blue-700 rounded-lg p-1.5 border border-blue-100"><span className="text-blue-400 block mb-0.5 text-[9px]">總請款金額</span><span className="text-xs font-black">${p.totalBill.toLocaleString()}</span></div>
-                    </div>
-                  </div>
-
-                  {expandedObj[p.id] && (
-                    <div className="p-2 bg-slate-50 border-t border-slate-100 space-y-1.5 text-[10px]">
-                      {p.recs.map((r, i) => (
-                        <div key={i} className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-2xs">
-                          <div onClick={(e)=>toggle(`${p.id}_${r.date}`, e)} className="flex items-center gap-2 p-2 cursor-pointer hover:bg-slate-50">
-                            <div className="font-mono text-slate-500 w-12 shrink-0 bg-slate-100 px-1 py-0.5 rounded text-center font-bold">{r.date.slice(5)}</div>
-                            <div className="w-8 text-center font-bold text-slate-600 shrink-0 bg-slate-50 rounded py-0.5">{r.workers.length}人</div>
-                            <div className="flex-1 font-bold text-slate-700 truncate">{r.tasks || '無摘要'}</div>
-                            <button onClick={(e)=>{e.stopPropagation(); onEdit(r.originalRecord);}} className="text-[10px] bg-blue-100 hover:bg-blue-200 text-blue-700 px-2.5 py-1 rounded font-bold shrink-0 transition-colors">編輯</button>
-                            <div className="text-[8px] text-slate-400 font-bold ml-1">{expandedObj[`${p.id}_${r.date}`]?'▲':'▼'}</div>
-                          </div>
-                          
-                          {expandedObj[`${p.id}_${r.date}`] && (
-                            <div className="p-2 bg-slate-50/80 border-t border-slate-100 space-y-1">
-                              {r.workers.length>0 && <div className="text-slate-700 font-bold mb-1">出席人員: <span className="text-blue-600">{r.workers.join('、')}</span></div>}
-                              {r.mats.map((m,j) => <div key={'m'+j} className="flex justify-between items-center text-slate-600 bg-white px-1.5 py-1 rounded border border-slate-100"><span className="truncate flex-1">📦 {m.name} <span className="text-[9px] text-slate-400">(x{m.qty})</span></span><span className="shrink-0 ml-2 font-bold">${m.total}</span></div>)}
-                              {r.exps.map((ex,j) => <div key={'e'+j} className="flex justify-between items-center text-slate-600 bg-white px-1.5 py-1 rounded border border-slate-100"><span className="truncate flex-1">⛽ {ex.name}</span><span className="shrink-0 ml-2 font-bold">${ex.total}</span></div>)}
-                              {r.mats.length === 0 && r.exps.length === 0 && <div className="text-slate-400 text-[9px] italic">無物料與其他費用紀錄</div>}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </Card>
-              ))}
-              {pStats.length===0 && <div className="text-center text-slate-400 py-6 font-bold bg-white rounded-lg border border-slate-200">尚無工程紀錄</div>}
             </div>
           );
         }
